@@ -291,7 +291,7 @@ elif st.session_state["page"] == "map":
 
     if route_df is None or user_lat is None or user_lon is None:
         st.error("Keine Route vorhanden. Bitte zurück und neu berechnen.")
-        st.button("Zurück", width="stretch",, on_click=reset_all)
+        st.button("Zurück", width="stretch", on_click=reset_all)
         st.stop()
 
     ensure_progress_loaded()
@@ -336,7 +336,7 @@ elif st.session_state["page"] == "map":
 
     st.subheader("Reihenfolge")
     show_cols = [c for c in ["name", "distance_m", "open_now"] if c in route_df.columns]
-    st.dataframe(route_df[show_cols], width="stretch",, hide_index=True)
+    st.dataframe(route_df[show_cols], width="stretch", hide_index=True)
 
     st.divider()
 
@@ -405,4 +405,4 @@ elif st.session_state["page"] == "map":
                 st.error(f"Speichern fehlgeschlagen: {e}")
 
     with col2:
-        st.button("Neu planen", width="stretch",, on_click=reset_all)
+        st.button("Neu planen", width="stretch", on_click=reset_all)
