@@ -7,7 +7,7 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import random
 import hashlib
-
+from pathlib import Path
 from helpers import (
     normalize_df,
     add_distance,
@@ -76,8 +76,20 @@ def geocode_address(addr: str):
     return float(loc.latitude), float(loc.longitude)
 
 
+
+
 def load_df() -> pd.DataFrame:
-    return pd.read_csv("data/regensburg_bars_backup.csv")
+    base = Path(__file__).resolve().parent  # Ordner von app.py
+    csv_path = (base / ".." / "data" / "regensburg_bars_backup.csv").resolve()
+
+    if not csv_path.exists():
+        # Debug-Hilfe (zeigt dir in Streamlit sofort, wo er sucht)
+        st.error(f"CSV nicht gefunden unter: {csv_path}")
+        st.info(f"Aktueller Ordner: {Path.cwd()}")
+        st.stop()
+
+    return pd.read_csv(csv_path)
+
 
 
 def _stable_seed(*parts: str) -> int:
@@ -157,7 +169,7 @@ def deck_editor_ui():
 
     edited = st.data_editor(
         df[["id", "title", "task"]],
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         column_config={
             "id": st.column_config.TextColumn("id", disabled=True),
@@ -168,7 +180,7 @@ def deck_editor_ui():
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Deck speichern", use_container_width=True):
+        if st.button("Deck speichern", width="stretch",):
             # re-create cards list
             cleaned = []
             for _, row in edited.iterrows():
@@ -189,7 +201,7 @@ def deck_editor_ui():
                 st.error(f"Speichern fehlgeschlagen: {e}")
 
     with col2:
-        if st.button("Progress zurücksetzen", use_container_width=True):
+        if st.button("Progress zurücksetzen", width="stretch",):
             ensure_progress_loaded()
             st.session_state["progress"] = {}
             try:
@@ -226,9 +238,9 @@ if st.session_state["page"] == "input":
 
     col_a, col_b = st.columns(2)
     with col_a:
-        do_calc = st.button("Route berechnen", use_container_width=True)
+        do_calc = st.button("Route berechnen", width="stretch",)
     with col_b:
-        do_reset = st.button("Reset", use_container_width=True)
+        do_reset = st.button("Reset", width="stretch",
 
     if do_reset:
         reset_all()
@@ -280,7 +292,7 @@ elif st.session_state["page"] == "map":
 
     if route_df is None or user_lat is None or user_lon is None:
         st.error("Keine Route vorhanden. Bitte zurück und neu berechnen.")
-        st.button("Zurück", use_container_width=True, on_click=reset_all)
+        st.button("Zurück", width="stretch",, on_click=reset_all)
         st.stop()
 
     ensure_progress_loaded()
@@ -325,7 +337,7 @@ elif st.session_state["page"] == "map":
 
     st.subheader("Reihenfolge")
     show_cols = [c for c in ["name", "distance_m", "open_now"] if c in route_df.columns]
-    st.dataframe(route_df[show_cols], use_container_width=True, hide_index=True)
+    st.dataframe(route_df[show_cols], width="stretch",, hide_index=True)
 
     st.divider()
 
@@ -386,7 +398,7 @@ elif st.session_state["page"] == "map":
     # Persist progress to GitHub
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Progress speichern", use_container_width=True, disabled=not progress_changed):
+        if st.button("Progress speichern", width="stretch", disabled=not progress_changed):
             try:
                 save_progress(st.session_state["progress"])
                 st.success("Progress gespeichert.")
@@ -394,4 +406,4 @@ elif st.session_state["page"] == "map":
                 st.error(f"Speichern fehlgeschlagen: {e}")
 
     with col2:
-        st.button("Neu planen", use_container_width=True, on_click=reset_all)
+        st.button("Neu planen", width="stretch",, on_click=reset_all)
