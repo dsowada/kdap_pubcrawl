@@ -77,7 +77,6 @@ def geocode_address(addr: str):
 
 
 
-
 def load_df() -> pd.DataFrame:
     base = Path(__file__).resolve().parent  # Ordner von app.py
     csv_path = (base / ".." / "data" / "regensburg_bars_backup.csv").resolve()
@@ -240,7 +239,7 @@ if st.session_state["page"] == "input":
     with col_a:
         do_calc = st.button("Route berechnen", width="stretch",)
     with col_b:
-        do_reset = st.button("Reset", width="stretch",
+        do_reset = st.button("Reset", width="stretch",)
 
     if do_reset:
         reset_all()
