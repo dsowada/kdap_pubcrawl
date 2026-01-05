@@ -20,4 +20,4 @@ venv/
 Thumbs.db
 
 # Data (raw data usually not in git)
-data/raw/
+#data/raw/

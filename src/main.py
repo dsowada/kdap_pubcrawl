@@ -51,7 +51,7 @@ def main():
     k = 4
     # maybe gewichtung noch einstellen 
     #df = get_bars_regensburg_df(center_lat=49.019533, center_lon=12.097487, radius_m=1200)
-    df = pd.read_csv("data/regensburg_bars_backup.csv")
+    df = pd.read_csv("../data/regensburg_bars_backup.csv")
     df = normalize_df(df)
 
     df = add_distance(df, user_lat, user_lon)
