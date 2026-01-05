@@ -120,13 +120,17 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def load_df() -> pd.DataFrame:
-    csv_path = (repo_root() / CSV_REL_PATH).resolve()
-    if not csv_path.exists():
-        st.error(f"CSV nicht gefunden unter: {csv_path}")
-        st.info(f"Aktueller Ordner: {Path.cwd()}")
-        st.stop()
-    return pd.read_csv(csv_path)
+#def load_df() -> pd.DataFrame:
+ #   csv_path = (repo_root() / CSV_REL_PATH).resolve()
+  #  if not csv_path.exists():
+   #     st.error(f"CSV nicht gefunden unter: {csv_path}")
+    #    st.info(f"Aktueller Ordner: {Path.cwd()}")
+     #   st.stop()
+    #return pd.read_csv(csv_path)
+
+def load_df():
+    df = pd.read_csv("../data/regensburg_bars_backup.csv")
+    return df
 
 
 # ---------------------------------------------------------------------
