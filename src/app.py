@@ -77,7 +77,7 @@ def geocode_address(addr: str):
 
 
 def load_df() -> pd.DataFrame:
-    return pd.read_csv("regensburg_bars_backup.csv")
+    return pd.read_csv("data/regensburg_bars_backup.csv")
 
 
 def _stable_seed(*parts: str) -> int:
