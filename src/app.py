@@ -1,35 +1,60 @@
-# app.py
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-import folium
-from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim
-import random
+# src/app.py
+# Stable Streamlit app: input -> map, collapsible map, global cards + global progress (GitHub if configured),
+# robust CSV path loading, robust geocoding (timeouts/retries/cache), Streamlit width API (no use_container_width).
+
+import base64
 import hashlib
+import json
+import random
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import folium
+import pandas as pd
+import requests
+import streamlit as st
+from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+from geopy.geocoders import Nominatim
+from streamlit_folium import st_folium
+
 from helpers import (
     normalize_df,
     add_distance,
     add_opening_hours_features,
     select_candidates,
     ors_walking_route_coords,
-    load_cards,
-    save_cards,
-    load_progress,
-    save_progress,
 )
 
-# -----------------------------
-# Page config (mobile-friendly)
-# -----------------------------
+# ---------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------
 st.set_page_config(page_title="Pubcrawl Planner", layout="centered")
 
-# -----------------------------
-# Session state init
-# -----------------------------
+# Hardcoded ORS key (as requested)
+ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
+
+# CSV location (recommended repo layout):
+# repo_root/
+#   data/regensburg_bars_backup.csv
+#   src/app.py
+CSV_REL_PATH = Path("data") / "regensburg_bars_backup.csv"
+
+# GitHub persistence settings (optional; works locally without)
+# Put these in Streamlit secrets when hosting:
+# GH_TOKEN, GH_REPO="user/repo", GH_BRANCH="main"
+# GH_PATH_CARDS="data/cards.json"
+# GH_PATH_PROGRESS="data/progress.json"
+DEFAULT_CARDS_PATH = "data/cards.json"
+DEFAULT_PROGRESS_PATH = "data/progress.json"
+
+
+# ---------------------------------------------------------------------
+# Session State
+# ---------------------------------------------------------------------
 if "page" not in st.session_state:
-    st.session_state["page"] = "input"
+    st.session_state["page"] = "input"  # "input" or "map"
 
 if "user_lat" not in st.session_state:
     st.session_state["user_lat"] = None
@@ -45,50 +70,33 @@ if "k" not in st.session_state:
 if "prefs" not in st.session_state:
     st.session_state["prefs"] = {"food": False, "football": False, "karaoke": False}
 
-# Card assignment per bar (stable within session)
+# card assignment per bar for current route
 if "card_assignment" not in st.session_state:
     st.session_state["card_assignment"] = {}  # {bar_name: card_id}
 
-# Progress is persistent (GitHub JSON)
+# progress is global (same for all users) if persisted; local fallback works too
 if "progress" not in st.session_state:
-    st.session_state["progress"] = {}  # loaded from GH once
+    st.session_state["progress"] = {}
 
 if "progress_loaded" not in st.session_state:
     st.session_state["progress_loaded"] = False
 
+# internal SHAs for GitHub contents updates
+if "__cards_sha" not in st.session_state:
+    st.session_state["__cards_sha"] = None
+if "__progress_sha" not in st.session_state:
+    st.session_state["__progress_sha"] = None
 
-# -----------------------------
-# Helpers
-# -----------------------------
+
+# ---------------------------------------------------------------------
+# Utility Helpers
+# ---------------------------------------------------------------------
 def reset_all():
     st.session_state["page"] = "input"
     st.session_state["user_lat"] = None
     st.session_state["user_lon"] = None
     st.session_state["route_df"] = None
     st.session_state["card_assignment"] = {}
-
-
-def geocode_address(addr: str):
-    geolocator = Nominatim(user_agent="pubcrawl-planner")
-    loc = geolocator.geocode(addr)
-    if loc is None:
-        return None, None
-    return float(loc.latitude), float(loc.longitude)
-
-
-
-def load_df() -> pd.DataFrame:
-    base = Path(__file__).resolve().parent  # Ordner von app.py
-    csv_path = (base / ".." / "data" / "regensburg_bars_backup.csv").resolve()
-
-    if not csv_path.exists():
-        # Debug-Hilfe (zeigt dir in Streamlit sofort, wo er sucht)
-        st.error(f"CSV nicht gefunden unter: {csv_path}")
-        st.info(f"Aktueller Ordner: {Path.cwd()}")
-        st.stop()
-
-    return pd.read_csv(csv_path)
-
 
 
 def _stable_seed(*parts: str) -> int:
@@ -107,23 +115,215 @@ def format_distance_m(val) -> str:
     return f"{int(m)} m"
 
 
-def ensure_progress_loaded():
+def repo_root() -> Path:
+    # src/app.py -> repo_root is parent of src
+    return Path(__file__).resolve().parent.parent
+
+
+def load_df() -> pd.DataFrame:
+    csv_path = (repo_root() / CSV_REL_PATH).resolve()
+    if not csv_path.exists():
+        st.error(f"CSV nicht gefunden unter: {csv_path}")
+        st.info(f"Aktueller Ordner: {Path.cwd()}")
+        st.stop()
+    return pd.read_csv(csv_path)
+
+
+# ---------------------------------------------------------------------
+# Geocoding (robust + cached)
+# ---------------------------------------------------------------------
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def geocode_address(addr: str) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Robust geocoding via Nominatim with retries, higher timeout and caching.
+    Returns (lat, lon) or (None, None).
+    """
+    geolocator = Nominatim(user_agent="pubcrawl-planner", timeout=10)
+
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            loc = geolocator.geocode(addr)
+            if loc is None:
+                return None, None
+            return float(loc.latitude), float(loc.longitude)
+        except (GeocoderTimedOut, GeocoderUnavailable) as e:
+            last_err = e
+            time.sleep(0.8 * (attempt + 1))
+        except Exception as e:
+            last_err = e
+            break
+
+    # Keep last error for optional UI diagnostics
+    st.session_state["geocode_last_error"] = str(last_err) if last_err else None
+    return None, None
+
+
+# ---------------------------------------------------------------------
+# GitHub persistence (optional) + local fallback
+# ---------------------------------------------------------------------
+def _gh_headers() -> Optional[Dict[str, str]]:
+    token = st.secrets.get("GH_TOKEN", None)
+    if not token:
+        return None
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _gh_repo_info() -> Tuple[Optional[str], Optional[str], str]:
+    repo = st.secrets.get("GH_REPO", "")
+    branch = st.secrets.get("GH_BRANCH", "main")
+    if not repo or "/" not in repo:
+        return None, None, branch
+    owner, name = repo.split("/", 1)
+    return owner, name, branch
+
+
+def gh_get_json(path: str, default: Any) -> Tuple[Any, Optional[str]]:
+    """
+    Returns (data, sha). Uses GitHub if secrets configured; else returns local file (repo) if available.
+    """
+    headers = _gh_headers()
+    owner, repo, branch = _gh_repo_info()
+
+    # If GH is configured, use GitHub contents API
+    if headers and owner and repo:
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+        r = requests.get(url, headers=headers, params={"ref": branch}, timeout=20)
+        if r.status_code == 404:
+            return default, None
+        r.raise_for_status()
+        payload = r.json()
+        sha = payload.get("sha")
+        content_b64 = payload.get("content", "")
+        if not content_b64:
+            return default, sha
+        raw = base64.b64decode(content_b64).decode("utf-8")
+        try:
+            return json.loads(raw), sha
+        except Exception:
+            return default, sha
+
+    # Local fallback (useful for local development)
+    local_path = (repo_root() / path).resolve()
+    if local_path.exists():
+        try:
+            return json.loads(local_path.read_text(encoding="utf-8")), None
+        except Exception:
+            return default, None
+
+    return default, None
+
+
+def gh_put_json(path: str, data: Any, sha: Optional[str], commit_message: str) -> None:
+    """
+    Writes to GitHub if configured; otherwise writes to local repo file (for local dev).
+    """
+    headers = _gh_headers()
+    owner, repo, branch = _gh_repo_info()
+
+    raw = json.dumps(data, ensure_ascii=False, indent=2)
+
+    # GitHub write
+    if headers and owner and repo:
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+        content_b64 = base64.b64encode(raw.encode("utf-8")).decode("utf-8")
+        body: Dict[str, Any] = {"message": commit_message, "content": content_b64, "branch": branch}
+        if sha:
+            body["sha"] = sha
+        r = requests.put(url, headers=headers, json=body, timeout=20)
+        r.raise_for_status()
+        return
+
+    # Local dev fallback
+    local_path = (repo_root() / path).resolve()
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_text(raw, encoding="utf-8")
+
+
+def load_cards() -> List[Dict[str, str]]:
+    path = st.secrets.get("GH_PATH_CARDS", DEFAULT_CARDS_PATH)
+    data, sha = gh_get_json(path, default=[])
+    st.session_state["__cards_sha"] = sha
+
+    cards: List[Dict[str, str]] = []
+    if isinstance(data, list):
+        for x in data:
+            if isinstance(x, dict) and x.get("title") and x.get("task"):
+                cid = str(x.get("id") or "").strip()
+                title = str(x["title"]).strip()
+                task = str(x["task"]).strip()
+                cards.append({"id": cid, "title": title, "task": task})
+
+    # ensure IDs
+    for i, c in enumerate(cards):
+        if not c["id"]:
+            c["id"] = f"c{i+1}"
+
+    # minimal defaults if empty
+    if not cards:
+        cards = [
+            {"id": "c1", "title": "Icebreaker", "task": "Jeder nennt eine Fun-Fact-Lüge und die Gruppe errät, was stimmt."},
+            {"id": "c2", "title": "Foto-Challenge", "task": "Macht ein Gruppenfoto mit einem Fremden (höflich fragen)."},
+        ]
+    return cards
+
+
+def save_cards(cards: List[Dict[str, str]]) -> None:
+    path = st.secrets.get("GH_PATH_CARDS", DEFAULT_CARDS_PATH)
+    cleaned: List[Dict[str, str]] = []
+
+    for c in cards:
+        title = str(c.get("title", "")).strip()
+        task = str(c.get("task", "")).strip()
+        if not title or not task:
+            continue
+        cid = str(c.get("id", "")).strip() or f"c{len(cleaned)+1}"
+        cleaned.append({"id": cid, "title": title, "task": task})
+
+    sha = st.session_state.get("__cards_sha")
+    gh_put_json(path, cleaned, sha, commit_message="Update cards deck via Streamlit")
+
+    # refresh sha (only meaningful in GH mode)
+    _, new_sha = gh_get_json(path, default=cleaned)
+    st.session_state["__cards_sha"] = new_sha
+
+
+def load_progress() -> Dict[str, bool]:
+    path = st.secrets.get("GH_PATH_PROGRESS", DEFAULT_PROGRESS_PATH)
+    data, sha = gh_get_json(path, default={})
+    st.session_state["__progress_sha"] = sha
+    return data if isinstance(data, dict) else {}
+
+
+def save_progress(progress: Dict[str, bool]) -> None:
+    path = st.secrets.get("GH_PATH_PROGRESS", DEFAULT_PROGRESS_PATH)
+    sha = st.session_state.get("__progress_sha")
+    gh_put_json(path, progress, sha, commit_message="Update progress via Streamlit")
+    _, new_sha = gh_get_json(path, default=progress)
+    st.session_state["__progress_sha"] = new_sha
+
+
+def ensure_progress_loaded() -> None:
     if not st.session_state["progress_loaded"]:
         try:
             st.session_state["progress"] = load_progress()
         except Exception:
-            # If GH not configured or error occurs, fall back to in-memory
             st.session_state["progress"] = {}
         st.session_state["progress_loaded"] = True
 
 
-def assign_cards_to_route(route_df: pd.DataFrame, cards: list[dict]):
-    """
-    Assigns one card per bar (bar_name -> card_id). Stable per day, tries to avoid duplicates.
-    """
+# ---------------------------------------------------------------------
+# Cards assignment + Editor UI
+# ---------------------------------------------------------------------
+def assign_cards_to_route(route_df: pd.DataFrame, cards: List[Dict[str, str]]) -> None:
     if not cards:
         return
 
+    # stable per day (same route day -> same deck order), avoids duplicates when possible
     day_str = datetime.now().strftime("%Y-%m-%d")
     seed = _stable_seed("deck", day_str)
     rnd = random.Random(seed)
@@ -150,16 +350,13 @@ def assign_cards_to_route(route_df: pd.DataFrame, cards: list[dict]):
         used.add(pick["id"])
 
 
-def deck_editor_ui():
-    """
-    Editable deck stored persistently via GitHub (helpers.load_cards/save_cards).
-    """
+def deck_editor_ui() -> None:
     st.subheader("Karten-Deck verwalten")
 
     try:
         cards = load_cards()
     except Exception as e:
-        st.error(f"Deck konnte nicht geladen werden (GitHub Secrets gesetzt?): {e}")
+        st.error(f"Deck konnte nicht geladen werden: {e}")
         return
 
     df = pd.DataFrame(cards) if cards else pd.DataFrame(columns=["id", "title", "task"])
@@ -177,10 +374,9 @@ def deck_editor_ui():
         },
     )
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Deck speichern", width="stretch",):
-            # re-create cards list
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Deck speichern", width="stretch"):
             cleaned = []
             for _, row in edited.iterrows():
                 title = str(row.get("title") or "").strip()
@@ -193,14 +389,13 @@ def deck_editor_ui():
             try:
                 save_cards(cleaned)
                 st.success("Deck gespeichert.")
-                # Reset assignment so new deck may apply
                 st.session_state["card_assignment"] = {}
                 st.rerun()
             except Exception as e:
                 st.error(f"Speichern fehlgeschlagen: {e}")
 
-    with col2:
-        if st.button("Progress zurücksetzen", width="stretch",):
+    with c2:
+        if st.button("Progress zurücksetzen", width="stretch"):
             ensure_progress_loaded()
             st.session_state["progress"] = {}
             try:
@@ -211,9 +406,9 @@ def deck_editor_ui():
                 st.error(f"Reset fehlgeschlagen: {e}")
 
 
-# -----------------------------
+# ---------------------------------------------------------------------
 # INPUT PAGE
-# -----------------------------
+# ---------------------------------------------------------------------
 if st.session_state["page"] == "input":
     st.title("Pubcrawl Planner")
 
@@ -235,17 +430,17 @@ if st.session_state["page"] == "input":
     st.session_state["k"] = int(k)
     st.session_state["prefs"] = {"food": food, "football": football, "karaoke": karaoke}
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        do_calc = st.button("Route berechnen", width="stretch",)
-    with col_b:
-        do_reset = st.button("Reset", width="stretch",)
+    b1, b2 = st.columns(2)
+    with b1:
+        do_calc = st.button("Route berechnen", width="stretch")
+    with b2:
+        do_reset = st.button("Reset", width="stretch")
 
     if do_reset:
         reset_all()
         st.rerun()
 
-    with st.expander("Karten verwalten (persistiert in GitHub)", expanded=False):
+    with st.expander("Karten verwalten (global)", expanded=False):
         deck_editor_ui()
 
     if do_calc:
@@ -253,7 +448,12 @@ if st.session_state["page"] == "input":
             user_lat, user_lon = geocode_address(address)
 
         if user_lat is None or user_lon is None:
-            st.error("Adresse nicht gefunden. Bitte genauer eingeben.")
+            st.error(
+                "Standort konnte nicht ermittelt werden. "
+                "Bitte Adresse präzisieren (z. B. 'Domplatz 1, Regensburg') oder später erneut versuchen."
+            )
+            if st.session_state.get("geocode_last_error"):
+                st.caption(f"Geocoding-Details: {st.session_state['geocode_last_error']}")
             st.stop()
 
         st.session_state["user_lat"] = user_lat
@@ -271,17 +471,21 @@ if st.session_state["page"] == "input":
 
             df = add_distance(df, user_lat, user_lon)
             df = add_opening_hours_features(df, now=datetime.now())
+
             candidates = select_candidates(df, st.session_state["k"])
             route_df = candidates.head(st.session_state["k"]).copy().reset_index(drop=True)
             st.session_state["route_df"] = route_df
+
+            # reset assignment each time you plan new route
+            st.session_state["card_assignment"] = {}
 
         st.session_state["page"] = "map"
         st.rerun()
 
 
-# -----------------------------
+# ---------------------------------------------------------------------
 # MAP PAGE
-# -----------------------------
+# ---------------------------------------------------------------------
 elif st.session_state["page"] == "map":
     st.title("Deine Route")
 
@@ -296,21 +500,21 @@ elif st.session_state["page"] == "map":
 
     ensure_progress_loaded()
 
-    # Load cards deck (persistent)
+    # Load cards (global)
     try:
         cards = load_cards()
     except Exception:
         cards = []
-
     cards_by_id = {c["id"]: c for c in cards}
+
     assign_cards_to_route(route_df, cards)
 
     # Collapsible map
     with st.expander("Karte anzeigen / ausblenden", expanded=False):
         m = folium.Map(location=[user_lat, user_lon], zoom_start=14)
-
         folium.Marker([user_lat, user_lon], tooltip="Start", popup="Start").add_to(m)
 
+        # Markers
         for i, r in route_df.iterrows():
             lat, lon = float(r["lat"]), float(r["lon"])
             folium.Marker(
@@ -319,13 +523,10 @@ elif st.session_state["page"] == "map":
                 popup=f"{i+1}. {r['name']}",
             ).add_to(m)
 
-        # ORS hardcoded (as requested)
-        ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
-
+        # Foot routes
         route_points = [(user_lat, user_lon)] + [
             (float(r["lat"]), float(r["lon"])) for _, r in route_df.iterrows()
         ]
-
         for i in range(len(route_points) - 1):
             seg = ors_walking_route_coords(ORS_API_KEY, route_points[i], route_points[i + 1])
             folium.PolyLine(seg).add_to(m)
@@ -341,8 +542,6 @@ elif st.session_state["page"] == "map":
     st.divider()
 
     st.subheader("Karten pro Bar")
-
-    # Render per-bar card with checkbox + strikethrough
     progress_changed = False
 
     for i, r in route_df.iterrows():
@@ -371,7 +570,7 @@ elif st.session_state["page"] == "map":
                 st.session_state["progress"][done_key] = new_done
                 progress_changed = True
 
-            # Card look
+            # Card look + strikethrough when done
             st.markdown(
                 """
                 <div style="
@@ -394,9 +593,10 @@ elif st.session_state["page"] == "map":
 
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # Persist progress to GitHub
-    col1, col2 = st.columns(2)
-    with col1:
+    st.divider()
+
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("Progress speichern", width="stretch", disabled=not progress_changed):
             try:
                 save_progress(st.session_state["progress"])
@@ -404,5 +604,5 @@ elif st.session_state["page"] == "map":
             except Exception as e:
                 st.error(f"Speichern fehlgeschlagen: {e}")
 
-    with col2:
+    with c2:
         st.button("Neu planen", width="stretch", on_click=reset_all)
