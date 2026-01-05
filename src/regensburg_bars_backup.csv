@@ -1,0 +1,56 @@
+name,amenity,lat,lon,opening_hours,street,housenumber,postcode,city
+Heimat,pub,49.0199887,12.0919512,Mo-Sa 20:00-02:00,Am Römling,9,93047,Regensburg
+Irish Harp,pub,49.0208415,12.0969389,"Su-Th 18:00-01:00, Fr,Sa 16:00-02:00",,,,
+Apotheke GbR,pub,49.018994,12.0933471,Mo-Th 10:00-01:00; Fr-Sa 10:00-02:00; Su 18:00-24:00,Rote-Hahnen-Gasse,8,93047,Regensburg
+Hinterhaus,pub,49.0192694,12.0924936,18:00-02:00,,,,
+Freunde der italienischen Oper,pub,49.019063,12.0928089,Tu-Sa 19:00-02:00,,,,
+Olle Gaffel,pub,49.0188123,12.092429,"Tu-Th 17:00-01:00, Fr 17:00-02:00, Sa,Su 13:00-02:00",,,,
+Zweigstelle,pub,49.019062,12.093236,"Th,Fr,Sa 20:00-02:00",,,,
+Central Billard,pub,49.0190793,12.0931316,Mo-Su 19:00-02:00,,,,
+Wuid & Schee,bar,49.0203765,12.0976892,,Unter den Schwibbögen,1,93047,Regensburg
+Orange Bar,bar,49.0211379,12.0936159,"Tu-Th 20:00-01:00, Fr,Sa 20:00-02:00",,,,
+Kinokneipe,pub,49.0179779,12.1096524,,,,,
+Clixx Billard & Bar,pub,49.0097342,12.100087,"Mo-Th 18:00-02:00, Fr,Sa 18:00-03:00, Su 14:00-02:00",Galgenbergstraße,2c,93053,Regensburg
+Murphy's Law,pub,49.0177702,12.0939292,"Su-We 18:00-01:00, Th-Sa 18:00-02:00",Spiegelgasse,6,93047,Regensburg
+da Silva,bar,49.0166878,12.0959919,"Tu, Th-Sa 21:00-02:00",Obermünsterstraße,9,93047,Regensburg
+Banane,pub,49.0205828,12.09194,Tu-Sa 18:00-02:00,,,,
+Piratenhöhle,pub,49.0208069,12.0952906,Th-Sa 20:00-02:00,,,,
+Flannigan's,bar,49.0210155,12.0940149,"Mo-Th 20:00-02:00, Fr,Sa 19:30-02:00",Baumhackergasse,2,93047,Regensburg
+The Byrdcave,bar,49.021261,12.0927913,,,,,
+Ka5par,bar,49.0190066,12.0942751,,Hinter der Grieb,5,93047,Regensburg
+Escobar,pub,49.0173804,12.0937402,,,,,
+Blomberg,bar,49.0189563,12.0890521,Mo-Su 10:00-24:00,Jakobstraße,1,93047,Regensburg
+The Artemis Heaven Bar,bar,49.0204928,12.0892111,"Mo,We,Th 14:00-24:00, Fr,Sa 10:00-02:00",Rote-Löwen-Straße,7,93047,Regensburg
+Zum Sauseneck,pub,49.0212139,12.0939322,,,,,
+Musikbar Sax,pub,49.0178439,12.0931478,"Su-We 20:00-02:00, Th-Sa 20:00-03:00",Hinter der Pfannenschmiede,1,93047,Regensburg
+Rotkäppchen,pub,49.0153208,12.0978363,Mo-Su 20:00-02:00,Fröhliche-Türken-Straße,14,93047,Regensburg
+Zur geflickten Trommel,pub,49.018696,12.0942728,"Su-Th 17:00-01:00, Fr-Sa 17:00-02:00",Gesandtenstraße,2,93047,Regensburg
+mono,pub,49.0193966,12.0926684,"Mo-Su,PH 18:00-02:00",Rote-Hahnen-Gasse,2,93047,Regensburg
+Bar 13,pub,49.0212927,12.0926547,"Mo 20:00-03:00, Tu-Th 20:00-02:00, Fr,Sa,PH -1 day 20:00-04:00, Su 20:00-01:00",,,,
+U-Bar,bar,49.0178327,12.094138,"Tu,Fr,Sa 22:00-02:00, We 22:00-01:00, Th 21:30-02:00",Spiegelgasse,3,93047,Regensburg
+Hexenhäusl PSST,pub,49.0097467,12.1022237,Th-Sa 22:00-05:00,Furtmayrstraße,2,93053,Regensburg
+BÜRO,bar,49.02131,12.0925149,We-Sa 20:00-02:00,,,,
+Mamonia Lounge,bar,49.0147199,12.1061433,,,,,
+Filmbühne,pub,49.0208442,12.0971226,Mo-Su 20:30-02:00,Taubengäßchen,2,93047,Regensburg
+Dudes4,bar,49.0201466,12.1005055,Mo-Su 19:00+,,,,
+Tikibeat,bar,49.0198175,12.0891782,Th-Sa 19:00-01:00,Arnulfsplatz,4,93047,Regensburg
+Il Bar,bar,49.0194657,12.0902638,"Mo-Th 08:00-23:00, Fr,Sa 08:00-24:00, Su 09:00-23:00, PH 09:00-23:00",Drei-Mohren-Straße,7,93047,Regensburg
+Kosmonaut,bar,49.0209162,12.0965443,Tu-Sa 20:00-02:00,Goldene-Bären-Straße,10,93047,Regensburg
+Hotelbar Hansa,bar,49.0101513,12.0911052,,Friedenstraße,7,93051,Regensburg
+Vincent,bar,49.0157858,12.0987765,"""nur für Hotelgäste""",,,93047,Regensburg
+Mira Regensburg,bar,49.0179875,12.094145,,,,93047,Regensburg
+Barock Bar,bar,49.0199932,12.0968144,Mo-Su 20:00-24:00,,,,
+Beer Dorado,pub,49.0190725,12.1043674,Tu-Sa 18:00-24:00,,,,
+Chin-Chin,bar,49.0186179,12.0919865,"Mo-Th 16:00-24:00, Fr-Sa 13:00-01:00; Su 13:00-24:00; PH off",Gesandtenstraße,12,93047,Regensburg
+No7 Bar,bar,49.0193158,12.0917748,We-Sa 21:00-02:00; PH off,Glockengasse,3,93047,Regensburg
+VINYL,bar,49.0192901,12.0928264,"Mo 18:00-01:00, Tu-Th 18:00-02:00, Fr 18:00-03:00, Sa 14:00-03:00, Su 18:00-24:00",,,,
+Zazu,bar,49.0202527,12.098125,,Unter den Schwibbögen,3,93047,Regensburg
+Hausbar,bar,49.0189976,12.0941522,Th-Sa 21:00-00:20; PH off,Hinter der Grieb,7,93047,Regensburg
+Astra Kiezbar,bar,49.0194148,12.0918022,Tu-Sa 20:00-24:00; Fr-Su 00:00-02:00; PH off,Glockengasse,1,93047,Regensburg
+Bar.bar.a,bar,49.0200768,12.0968057,,Watmarkt,7,93047,Regensburg
+Tipsy,bar,49.0190795,12.0949557,"Tu-Th 17:00-23:00, Fr 17:00-24:00, Sa 16:00-24:00",,,,
+Bonaparte Bar,bar,49.0189936,12.0953376,Tu-Th 12:00-01:00; Fr 12:00-02:00; Sa 12:00-03:00; Su 12:00-00:00,,,93047,Regensburg
+FassBar,bar,49.0174823,12.0937078,Tu-Sa 21:00+,Spiegelgasse,10,93047,Regensburg
+Klappe,pub,49.0255759,12.097004,Mo-Su 16:00-23:30,Stadtamhof,13,93059,Regensburg
+Marple & Stringer,bar,49.0187403,12.0891578,"Mo-Fr 11:00-15:00,17:00-02:00, Sa,Su 10:00-02:00",Bismarckplatz,4,93047,Regensburg
+Lok.in,bar,49.012293,12.0998793,,,,,

@@ -2,6 +2,7 @@ import re
 import math
 from datetime import datetime
 import pandas as pd
+import openrouteservice
 
 
 # --- Distance (Haversine) in Metern ---
@@ -108,3 +109,23 @@ def select_candidates(df: pd.DataFrame, k: int) -> pd.DataFrame:
           .head(2 * k)
           .reset_index(drop=True)
     )
+
+def ors_walking_route_coords(api_key: str, start, end):
+    """
+    start/end: (lat, lon)
+    returns: list of (lat, lon) points for folium PolyLine
+    """
+    client = openrouteservice.Client(key=api_key)
+
+    # ORS expects coordinates as [lon, lat]
+    coords = [[start[1], start[0]], [end[1], end[0]]]
+
+    # geojson output gives a LineString geometry
+    res = client.directions(
+        coordinates=coords,
+        profile="foot-walking",
+        format="geojson"
+    )
+
+    line = res["features"][0]["geometry"]["coordinates"]  # list of [lon, lat]
+    return [(lat, lon) for lon, lat in line]
