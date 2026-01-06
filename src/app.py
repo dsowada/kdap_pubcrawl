@@ -120,17 +120,45 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-#def load_df() -> pd.DataFrame:
- #   csv_path = (repo_root() / CSV_REL_PATH).resolve()
-  #  if not csv_path.exists():
-   #     st.error(f"CSV nicht gefunden unter: {csv_path}")
-    #    st.info(f"Aktueller Ordner: {Path.cwd()}")
-     #   st.stop()
-    #return pd.read_csv(csv_path)
+from pathlib import Path
+import pandas as pd
+import streamlit as st
 
-def load_df():
-    df = pd.read_csv("../data/regensburg_bars_backup.csv")
-    return df
+def load_df() -> pd.DataFrame:
+    root = Path(__file__).resolve().parent.parent  # repo root (…/kdap_pubcrawl)
+    target_name = "regensburg_bars_backup.csv"
+
+    candidates = [
+        root / "data" / target_name,
+        root / "Data" / target_name,       # Case-Variante
+        root / target_name,                # falls doch im Root
+        root / "src" / "data" / target_name,  # falls versehentlich unter src/data
+    ]
+
+    for p in candidates:
+        if p.exists():
+            st.success(f"CSV gefunden: {p}")
+            return pd.read_csv(p)
+
+    # Debug: Was ist wirklich vorhanden?
+    st.error("CSV nicht gefunden. Debug-Infos:")
+
+    st.write("repo_root:", str(root))
+    st.write("root exists:", root.exists())
+    st.write("root contents:", sorted([x.name for x in root.iterdir()]) if root.exists() else [])
+
+    data_dir = root / "data"
+    st.write("data_dir:", str(data_dir))
+    st.write("data_dir exists:", data_dir.exists())
+    if data_dir.exists():
+        st.write("data_dir contents:", sorted([x.name for x in data_dir.iterdir()]))
+
+    # Rekursive Suche
+    hits = list(root.rglob(target_name))
+    st.write("rglob hits:", [str(h) for h in hits])
+
+    st.stop()
+
 
 
 # ---------------------------------------------------------------------
