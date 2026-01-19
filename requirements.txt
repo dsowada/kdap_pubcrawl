@@ -1,4 +1,10 @@
+streamlit
+pandas
+folium
+streamlit-folium
+geopy
+requests
+openrouteservice
 jupyter
 numpy
-pandas
 matplotlib

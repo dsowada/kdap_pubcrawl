@@ -10,7 +10,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
 import folium
 import pandas as pd
 import requests
@@ -18,6 +17,8 @@ import streamlit as st
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
+import streamlit.components.v1 as components
+
 
 from helpers import (
     normalize_df,
@@ -25,6 +26,7 @@ from helpers import (
     add_opening_hours_features,
     select_candidates,
     ors_walking_route_coords,
+    build_map_html,
 )
 
 # ---------------------------------------------------------------------
@@ -35,17 +37,7 @@ st.set_page_config(page_title="Pubcrawl Planner", layout="centered")
 # Hardcoded ORS key (as requested)
 ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
 
-# CSV location (recommended repo layout):
-# repo_root/
-#   data/regensburg_bars_backup.csv
-#   src/app.py
 CSV_REL_PATH = Path("data") / "regensburg_bars_backup.csv"
-
-# GitHub persistence settings (optional; works locally without)
-# Put these in Streamlit secrets when hosting:
-# GH_TOKEN, GH_REPO="user/repo", GH_BRANCH="main"
-# GH_PATH_CARDS="data/cards.json"
-# GH_PATH_PROGRESS="data/progress.json"
 DEFAULT_CARDS_PATH = "data/cards.json"
 DEFAULT_PROGRESS_PATH = "data/progress.json"
 
@@ -118,11 +110,6 @@ def format_distance_m(val) -> str:
 def repo_root() -> Path:
     # src/app.py -> repo_root is parent of src
     return Path(__file__).resolve().parent.parent
-
-
-from pathlib import Path
-import pandas as pd
-import streamlit as st
 
 def load_df() -> pd.DataFrame:
     root = Path(__file__).resolve().parent.parent  # repo root (…/kdap_pubcrawl)
@@ -437,43 +424,59 @@ def deck_editor_ui() -> None:
             except Exception as e:
                 st.error(f"Reset fehlgeschlagen: {e}")
 
-
-# ---------------------------------------------------------------------
 # INPUT PAGE
-# ---------------------------------------------------------------------
+
 if st.session_state["page"] == "input":
-    st.title("Pubcrawl Planner")
+    st.title("KDAP Pubcrawl Application")
 
-    st.write("Standort")
-    address = st.text_input("Adresse", value="Regensburg")
+    st.write("Location:")
+    address = st.text_input("Address", value="Regensburg")
 
-    st.write("Anzahl Bars")
-    k = st.number_input("k", min_value=1, max_value=20, value=int(st.session_state["k"]), step=1)
+    # 4 columns in ONE row directly under the address field
+    col_k, col_food, col_sports, col_surprise = st.columns([1.2, 1, 1, 1])
 
-    st.write("Vorlieben")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        food = st.toggle("Essen", value=st.session_state["prefs"]["food"])
-    with c2:
-        football = st.toggle("Fußball", value=st.session_state["prefs"]["football"])
-    with c3:
-        karaoke = st.toggle("Karaoke", value=st.session_state["prefs"]["karaoke"])
+    with col_k:
+        st.markdown("**Bars to visit**")
+        k = st.slider(
+            "k",
+            1, 20,
+            int(st.session_state["k"]),
+            1,
+            label_visibility="collapsed"
+        )
+
+    with col_food:
+        st.markdown("**Preferences**")
+        #st.write("")  # ← wichtiger Spacer
+        food = st.toggle("🍔 Food", value=st.session_state["prefs"]["food"])
+
+    with col_sports:
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+        #st.write("")  # gleicher Spacer
+        football = st.toggle("⚽ Sportsbar", value=st.session_state["prefs"]["football"])
+
+    with col_surprise:
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+        #st.write("")
+        surprise = st.toggle("🎤 Surprise", value=st.session_state["prefs"]["karaoke"])
+
 
     st.session_state["k"] = int(k)
-    st.session_state["prefs"] = {"food": food, "football": football, "karaoke": karaoke}
+    st.session_state["prefs"] = {"food": food, "football": football, "karaoke": surprise}
 
     b1, b2 = st.columns(2)
     with b1:
-        do_calc = st.button("Route berechnen", width="stretch")
+        do_calc = st.button("**Let's Go!**", use_container_width=True)
     with b2:
-        do_reset = st.button("Reset", width="stretch")
+        do_reset = st.button("Reset", use_container_width=True)
 
     if do_reset:
         reset_all()
         st.rerun()
 
-    with st.expander("Karten verwalten (global)", expanded=False):
-        deck_editor_ui()
+
+    #with st.expander("Karten verwalten (global)", expanded=False):
+    #    deck_editor_ui()
 
     if do_calc:
         with st.spinner("Suche Standort..."):
@@ -507,6 +510,12 @@ if st.session_state["page"] == "input":
             candidates = select_candidates(df, st.session_state["k"])
             route_df = candidates.head(st.session_state["k"]).copy().reset_index(drop=True)
             st.session_state["route_df"] = route_df
+            st.session_state["map_html"] = build_map_html(
+                        user_lat,
+                        user_lon,
+                        route_df
+                    )
+
 
             # reset assignment each time you plan new route
             st.session_state["card_assignment"] = {}
@@ -515,19 +524,17 @@ if st.session_state["page"] == "input":
         st.rerun()
 
 
-# ---------------------------------------------------------------------
 # MAP PAGE
-# ---------------------------------------------------------------------
 elif st.session_state["page"] == "map":
-    st.title("Deine Route")
+    st.title("Your route:")
 
     route_df = st.session_state["route_df"]
     user_lat = st.session_state["user_lat"]
     user_lon = st.session_state["user_lon"]
 
     if route_df is None or user_lat is None or user_lon is None:
-        st.error("Keine Route vorhanden. Bitte zurück und neu berechnen.")
-        st.button("Zurück", width="stretch", on_click=reset_all)
+        st.error("lookslike there's no route available, maybe you find a house party or your preferences are too special ...")
+        st.button("back", width="stretch", on_click=reset_all)
         st.stop()
 
     ensure_progress_loaded()
@@ -542,38 +549,22 @@ elif st.session_state["page"] == "map":
     assign_cards_to_route(route_df, cards)
 
     # Collapsible map
-    with st.expander("Karte anzeigen / ausblenden", expanded=False):
-        m = folium.Map(location=[user_lat, user_lon], zoom_start=14)
-        folium.Marker([user_lat, user_lon], tooltip="Start", popup="Start").add_to(m)
+    with st.expander("show/hide map", expanded=True):
+        if "map_html" in st.session_state:
+            components.html(
+                st.session_state["map_html"],
+                height=650
+            )
+        else:
+            st.warning("Missing map... try to reload it")
 
-        # Markers
-        for i, r in route_df.iterrows():
-            lat, lon = float(r["lat"]), float(r["lon"])
-            folium.Marker(
-                [lat, lon],
-                tooltip=f"{i+1}. {r['name']}",
-                popup=f"{i+1}. {r['name']}",
-            ).add_to(m)
-
-        # Foot routes
-        route_points = [(user_lat, user_lon)] + [
-            (float(r["lat"]), float(r["lon"])) for _, r in route_df.iterrows()
-        ]
-        for i in range(len(route_points) - 1):
-            seg = ors_walking_route_coords(ORS_API_KEY, route_points[i], route_points[i + 1])
-            folium.PolyLine(seg).add_to(m)
-
-        st_folium(m, width=360, height=650)
-
-    st.divider()
-
-    st.subheader("Reihenfolge")
+    st.subheader("Bar tour order")
     show_cols = [c for c in ["name", "distance_m", "open_now"] if c in route_df.columns]
     st.dataframe(route_df[show_cols], width="stretch", hide_index=True)
 
     st.divider()
 
-    st.subheader("Karten pro Bar")
+    st.subheader("Tasks per bar")
     progress_changed = False
 
     for i, r in route_df.iterrows():

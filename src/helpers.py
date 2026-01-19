@@ -358,4 +358,43 @@ def save_progress(progress: dict):
     gh_put_json(path, progress, sha, commit_message="Update progress via Streamlit")
     _, new_sha = gh_get_json(path, default=progress)
     st.session_state["__progress_sha"] = new_sha
+    
+#helper for html map
+
+import streamlit.components.v1 as components
+
+ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
+
+def build_map_html(user_lat, user_lon, route_df):
+    m = folium.Map(location=[user_lat, user_lon], zoom_start=19)
+
+    folium.Marker(
+        [user_lat, user_lon],
+        tooltip="Start",
+        popup="Start"
+    ).add_to(m)
+
+    # Markers
+    for i, r in route_df.iterrows():
+        lat, lon = float(r["lat"]), float(r["lon"])
+        folium.Marker(
+            [lat, lon],
+            tooltip=f"{i+1}. {r['name']}",
+            popup=f"{i+1}. {r['name']}",
+        ).add_to(m)
+
+    # Routes
+    route_points = [(user_lat, user_lon)] + [
+        (float(r["lat"]), float(r["lon"])) for _, r in route_df.iterrows()
+    ]
+
+    for i in range(len(route_points) - 1):
+        seg = ors_walking_route_coords(
+            ORS_API_KEY,
+            route_points[i],
+            route_points[i + 1]
+        )
+        folium.PolyLine(seg).add_to(m)
+
+    return m.get_root().render()
 
