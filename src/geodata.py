@@ -10,8 +10,6 @@ from geopy.geocoders import Nominatim
 
 ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
 
-
-
 def ors_walking_route_coords(
     start: Tuple[float, float],
     end: Tuple[float, float],

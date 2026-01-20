@@ -21,6 +21,9 @@ from model_data import (
     distance_score,
     compute_scores,
     rank_bars,
+    preference_in_df,
+    is_filled,
+    format_score_with_all_preference_emojis,
 )
 
 from geodata import (
@@ -42,7 +45,11 @@ CSV_REL_PATH = Path("data") / "regensburg_bars_backup.csv"
 DEFAULT_CARDS_PATH = "data/cards.json"
 DEFAULT_PROGRESS_PATH = "data/progress.json"
 
-
+PREFERENCE_EMOJIS = {
+    "food": "🍔🥪",
+    "special": "🎤🏓💃🏻🕺🏽",
+    "football": "⚽🎯",
+}
 # ---------------------------------------------------------------------
 # Session State
 # ---------------------------------------------------------------------
@@ -67,13 +74,9 @@ if "prefs" not in st.session_state:
         "surprise": False,
     }
 
+if "pref_message" not in st.session_state:
+    st.session_state["pref_message"] = None
 
-# # progress is global (same for all users) if persisted; local fallback works too
-# if "progress" not in st.session_state:
-#     st.session_state["progress"] = {}
-
-# if "progress_loaded" not in st.session_state:
-#     st.session_state["progress_loaded"] = False
 
 # ---------------------------------------------------------------------
 # Utility Helpers
@@ -83,6 +86,7 @@ def reset_all():
     st.session_state["user_lat"] = None
     st.session_state["user_lon"] = None
     st.session_state["route_df"] = None
+    st.session_state["pref_message"]= None
 
 #??
 def _stable_seed(*parts: str) -> int:
@@ -174,7 +178,6 @@ if st.session_state["page"] == "input":
         st.markdown("&nbsp;", unsafe_allow_html=True)
         surprise = st.toggle("🎤 Surprise", value=st.session_state["prefs"]["surprise"])
 
-    # 🔑 ZENTRALER PUNKT: Mapping in session_state
     st.session_state["prefs"] = {
         "food": food,
         "sportsbar": sportsbar,
@@ -223,19 +226,21 @@ if st.session_state["page"] == "input":
           
             df = add_distance(df, user_lat, user_lon)
             df = add_opening_hours_features(df, now=datetime.now())
-          
+            #df is a modelled table with openeing hours and computed distance from the user location
             prefs = st.session_state["prefs"]
 
             candidates = select_candidates(df, k)
             ranked_candidates = rank_bars(candidates, prefs)
+            # checking for preferences
+            print(preference_in_df(ranked_candidates, prefs))
+            if(preference_in_df(ranked_candidates, prefs) == False):
+                st.session_state["pref_message"] = "Your preference is not in walking distance."
+
 
             route_df = ranked_candidates.head(k).copy().reset_index(drop=True)
-
-
-            #testing end
-            # candidates = select_candidates(df, st.session_state["k"])
-            # route_df = candidates.head(st.session_state["k"]).copy().reset_index(drop=True)
+            
             st.session_state["route_df"] = route_df
+            
             st.session_state["map_html"] = build_map_html(
                         user_lat,
                         user_lon,
@@ -253,6 +258,7 @@ elif st.session_state["page"] == "map":
     route_df = st.session_state["route_df"]
     user_lat = st.session_state["user_lat"]
     user_lon = st.session_state["user_lon"]
+    pref_message = st.session_state["pref_message"]
 
     if route_df is None or user_lat is None or user_lon is None:
         st.error("lookslike there's no route available, maybe you find a house party or your preferences are too special ...")
@@ -268,9 +274,9 @@ elif st.session_state["page"] == "map":
             )
         else:
             st.warning("Missing map... try to reload it")
-
+    if(pref_message):
+        st.badge(pref_message,color ="orange")
     st.subheader("Bar tour order")
-    show_cols = [c for c in ["name", "distance_m", "score"] if c in route_df.columns]
+    show_cols = [c for c in ["name", "distance_m", "score_display"] if c in route_df.columns]
     st.dataframe(route_df[show_cols], width="stretch", hide_index=True)
-    st.dataframe(route_df)
     st.divider()

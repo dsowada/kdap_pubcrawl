@@ -1,8 +1,10 @@
+from locale import D_FMT
 import math
 import re
 from datetime import datetime
 from typing import Optional, Dict
 
+from altair import DataFormat
 import pandas as pd
 import streamlit as st
 
@@ -166,7 +168,7 @@ def derive_weights(toggles: dict, base: dict = None) -> dict:
     # Case 2/3: Nur aktivierte Toggles zählen "stark"
     # -> aktivierte auf 3.0, deaktivierte auf 0.0 (strikt: "nur wenn toggles aktiv")
     for f in FEATURES:
-        w[f] = 3.0 if toggles.get(f, False) else 0.0
+        w[f] = 4.5 if toggles.get(f, False) else 0.0
 
     # distance bleibt 5.0 immer
     w["distance"] = float(base.get("distance", 5.0))
@@ -253,3 +255,38 @@ def select_candidates(df: pd.DataFrame, k: int) -> pd.DataFrame:
         .head(2 * k)
         .reset_index(drop=True)
     )
+
+def preference_in_df(df: pd.DataFrame, toggles: dict) -> bool:
+    for pref, enabled in toggles.items():
+        if not enabled:
+            continue
+        if pref not in df.columns:
+            return False
+        if not df[pref].any():
+            return False
+    return True
+
+PREFERENCE_EMOJIS = {
+    "food": "🍔🥪",
+    "special": "🎤🏓💃🏻🕺🏽",
+    "football": "⚽🎯",
+}
+
+def is_filled(val) -> bool:
+    if pd.isna(val):
+        return False
+    return str(val).strip() != ""
+
+def format_score_with_all_preference_emojis(
+    score: float,
+    row: pd.Series,
+    preference_cols: list[str],
+    emoji_map: dict[str, str],
+) -> str:
+    emojis = [
+        emoji_map[pref]
+        for pref in preference_cols
+        if pref in row and is_filled(row[pref]) and pref in emoji_map
+    ]
+    return f"{score:.2f} {' '.join(emojis)}".rstrip()
+
