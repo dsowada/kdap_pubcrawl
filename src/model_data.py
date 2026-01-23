@@ -9,45 +9,34 @@ import pandas as pd
 import streamlit as st
 
 
-# --- Distance (Haversine) in meter ---
+# distance in meter
 def distance_m(user_lat: float, user_lon: float, lat: float, lon: float) -> float:
     R = 6371000.0  # Earth radius in meters
     phi1 = math.radians(user_lat)
     phi2 = math.radians(lat)
-    dphi = math.radians(lat - user_lat)
-    dlambda = math.radians(lon - user_lon)
+    deltalat = math.radians(lat - user_lat)
+    deltalon= math.radians(lon - user_lon)
 
     a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+        math.sin(deltalat / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(deltalon / 2) ** 2
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-
+#normalizes df for later modelling data (converts string to float, makes sure opening hours exist)
 def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalisiert Spalten und Typen für die weitere Verarbeitung.
-    - lat/lon -> numeric (ungültige Werte werden NaN)
-    - opening_hours_raw erzeugen, falls nur opening_hours existiert
-    """
     df = df.copy()
-
     if "lat" in df.columns:
         df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
     if "lon" in df.columns:
         df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
-
     if "opening_hours_raw" not in df.columns and "opening_hours" in df.columns:
         df["opening_hours_raw"] = df["opening_hours"]
-
     return df
 
-
+#adding col distance from users adresse to bar for selecting suitable candidates
 def add_distance(df: pd.DataFrame, user_lat: float, user_lon: float) -> pd.DataFrame:
-    """
-    Fügt distance_m (Meter) als Spalte hinzu.
-    """
     df = df.copy()
     distances = []
 
@@ -62,14 +51,8 @@ def add_distance(df: pd.DataFrame, user_lat: float, user_lon: float) -> pd.DataF
     return df
 
 
-# --- Opening hours: minimal support "Mo-Sa 20:00-02:00"
+# converts and searches for opening time in difficult to read "opening hours" string, to get the opening hours or information about the opening time
 def is_open_now_basic(opening_hours: str, now: datetime) -> Optional[bool]:
-    """
-    Minimaler Parser für ein sehr einfaches opening_hours-Format.
-    Gibt zurück:
-      - True / False, wenn interpretierbar
-      - None, wenn nicht interpretierbar oder leer
-    """
     if not isinstance(opening_hours, str) or not opening_hours.strip():
         return None
 
@@ -102,17 +85,13 @@ def is_open_now_basic(opening_hours: str, now: datetime) -> Optional[bool]:
     if start_min <= end_min:
         return start_min <= now_min <= end_min
 
-    # über Mitternacht (z.B. 20:00-02:00)
+    # AI helped me with sorting information about wether its the actual day or the next day when time passes 00:00
     return (now_min >= start_min) or (now_min <= end_min)
 
-
+#easier function to get information if the bar is open (1) closed(0) or else (0.5)
 def add_opening_hours_features(df: pd.DataFrame, now: datetime) -> pd.DataFrame:
-    """
-    Fügt open_now (True/False/None) und open_score (1.0/0.0/0.5) hinzu.
-    """
     df = df.copy()
     col = "opening_hours_raw" if "opening_hours_raw" in df.columns else "opening_hours"
-
     open_now_list = []
     open_score_list = []
 
@@ -141,43 +120,34 @@ DEFAULT_WEIGHTS = {
 
 
 FEATURES = ["food", "sportsbar", "surprise"]
-
+#getting information about features 
 def has_feature(cell) -> bool:
     if cell is None:
         return False
     s = str(cell).strip()
     return s != "" and s.lower() != "nan"
-
-
-
+#selecting the weighting depending on users input
 def derive_weights(toggles: dict, base: dict = None) -> dict:
-    """
-    toggles: {"food": bool, "sportsbar": bool, "surprise": bool}
-    """
     if base is None:
         base = DEFAULT_WEIGHTS
 
-    w = dict(base)  # copy
+    w = dict(base)
     enabled = [f for f in FEATURES if toggles.get(f, False)]
     n_enabled = len(enabled)
 
     if n_enabled == 0:
-        # Case 1: nichts aktiv -> Default bleibt (Features geben leichten Bonus)
+        # Case1: no user preference -> weighting stays the same 
         return w
 
-    # Case 2/3: Nur aktivierte Toggles zählen "stark"
-    # -> aktivierte auf 3.0, deaktivierte auf 0.0 (strikt: "nur wenn toggles aktiv")
+    #Case2: 1-3 toggle get activated by user 
     for f in FEATURES:
         w[f] = 4.5 if toggles.get(f, False) else 0.0
 
-    # distance bleibt 5.0 immer
+    #making sure distance stays the same
     w["distance"] = float(base.get("distance", 5.0))
     return w
-
+#getting the correct normalized distance score for correct weighting [1..0] where 1 is perfect and 0 very bad
 def distance_score(distance_m: float, d_min: float, d_max: float) -> float:
-    """
-    Normalisiert Distanz in [0..1], wobei 1 = beste (kleinste) Distanz.
-    """
     if distance_m is None:
         return 0.0
     try:
@@ -187,17 +157,11 @@ def distance_score(distance_m: float, d_min: float, d_max: float) -> float:
 
     denom = (d_max - d_min) if (d_max is not None and d_min is not None) else 0.0
     if denom <= 0:
-        # alle Distanzen gleich oder nicht vorhanden -> neutral
+        #if all distances are the sam eor not available then value stays  at 0.5
         return 0.5
     return (d_max - d) / denom
 
 def compute_scores(df, toggles: dict):
-    """
-    Erwartet df Spalten:
-      - distance_m (numeric)
-      - food, sportsbar, surprise (optional)
-    Ergebnis: df mit 'score' und 'pref_bonus'
-    """
     w = derive_weights(toggles)
 
     # Min/Max Distanz für Normalisierung
@@ -209,13 +173,13 @@ def compute_scores(df, toggles: dict):
 
     df = df.copy()
 
-    # Distanzscore
+    # Distanzscodistance score
     if "distance_m" in df.columns:
         df["_dist_score01"] = df["distance_m"].apply(lambda d: distance_score(d, d_min, d_max))
     else:
         df["_dist_score01"] = 0.0
 
-    # Feature-Bonus (gewichtete Summe)
+    #
     def row_bonus(row: pd.Series) -> float:
         bonus = 0.0
         for f in FEATURES:
@@ -231,24 +195,22 @@ def compute_scores(df, toggles: dict):
 
     return df
 
+#ranking bars: first prioority is the score (with preference) if its the same then the distance will be the decider
 def rank_bars(df, toggles: dict):
     scored = compute_scores(df, toggles)
 
     sort_cols = ["score"]
     ascending = [False]
 
-    # Tie-breaker: kleinere Distanz gewinnt bei gleichem Score
+    # when score is the same
     if "distance_m" in scored.columns:
         sort_cols.append("distance_m")
         ascending.append(True)
 
     return scored.sort_values(sort_cols, ascending=ascending)
 
-
+# creating df with selected candidates
 def select_candidates(df: pd.DataFrame, k: int) -> pd.DataFrame:
-    """
-    Nimmt die 2*k nächstgelegenen Bars (nach distance_m) als Kandidaten.
-    """
     return (
         df.dropna(subset=["distance_m"])
         .sort_values("distance_m", ascending=True)
@@ -265,28 +227,3 @@ def preference_in_df(df: pd.DataFrame, toggles: dict) -> bool:
         if not df[pref].any():
             return False
     return True
-
-PREFERENCE_EMOJIS = {
-    "food": "🍔🥪",
-    "special": "🎤🏓💃🏻🕺🏽",
-    "football": "⚽🎯",
-}
-
-def is_filled(val) -> bool:
-    if pd.isna(val):
-        return False
-    return str(val).strip() != ""
-
-def format_score_with_all_preference_emojis(
-    score: float,
-    row: pd.Series,
-    preference_cols: list[str],
-    emoji_map: dict[str, str],
-) -> str:
-    emojis = [
-        emoji_map[pref]
-        for pref in preference_cols
-        if pref in row and is_filled(row[pref]) and pref in emoji_map
-    ]
-    return f"{score:.2f} {' '.join(emojis)}".rstrip()
-

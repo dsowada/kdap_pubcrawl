@@ -10,17 +10,15 @@ from geopy.geocoders import Nominatim
 
 ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
 
+
+# start/end: (lat, lon)
+# returns: list of (lat, lon) points for folium PolyLine
 def ors_walking_route_coords(
     start: Tuple[float, float],
     end: Tuple[float, float],
-    api_key: str = ORS_API_KEY,
-):
-    """
-    start/end: (lat, lon)
-    returns: list of (lat, lon) points for folium PolyLine
-    """
+    api_key: str = ORS_API_KEY,):
     if not api_key:
-        raise RuntimeError("ORS_API_KEY ist leer. Bitte in helpers.py setzen.")
+        raise RuntimeError("ORS_API_KEY is empty")
 
     client = openrouteservice.Client(key=api_key)
 
@@ -30,10 +28,9 @@ def ors_walking_route_coords(
     line = res["features"][0]["geometry"]["coordinates"]  # list of [lon, lat]
     return [(lat, lon) for lon, lat in line]
 
-
+#using nomatim geocoding for better results with retries + caching
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
 def geocode_address(addr: str) -> Tuple[Optional[float], Optional[float]]:
-    """Nominatim Geocoding mit Retries + Cache."""
     geolocator = Nominatim(user_agent="pubcrawl-planner", timeout=10)
 
     last_err: Optional[Exception] = None
@@ -53,9 +50,8 @@ def geocode_address(addr: str) -> Tuple[Optional[float], Optional[float]]:
     st.session_state["geocode_last_error"] = str(last_err) if last_err else None
     return None, None
 
-
+#creates stable folium map including ORS routes
 def build_map_html(user_lat: float, user_lon: float, route_df: pd.DataFrame) -> str:
-    """Erzeugt eine Folium-Map inkl. ORS-Segmente und gibt HTML zurück."""
     m = folium.Map(location=[user_lat, user_lon], zoom_start=19)
 
     folium.Marker([user_lat, user_lon], tooltip="Start", popup="Start").add_to(m)

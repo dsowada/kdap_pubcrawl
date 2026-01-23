@@ -22,8 +22,6 @@ from model_data import (
     compute_scores,
     rank_bars,
     preference_in_df,
-    is_filled,
-    format_score_with_all_preference_emojis,
 )
 
 from geodata import (
@@ -32,27 +30,18 @@ from geodata import (
     ors_walking_route_coords, 
 )
 
-
-# ---------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------
 st.set_page_config(page_title="Pubcrawl Planner", layout="centered")
 
-# Hardcoded ORS key (as requested)
+# Hardcoded ORS key and const data, only here for better overview, normally seperated in const.py
 ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBjZTg0MmEwMDk0NjRkY2RiNzYzM2Q0NjBiZmJhN2EwIiwiaCI6Im11cm11cjY0In0="
 
 CSV_REL_PATH = Path("data") / "regensburg_bars_backup.csv"
 DEFAULT_CARDS_PATH = "data/cards.json"
 DEFAULT_PROGRESS_PATH = "data/progress.json"
 
-PREFERENCE_EMOJIS = {
-    "food": "🍔🥪",
-    "special": "🎤🏓💃🏻🕺🏽",
-    "football": "⚽🎯",
-}
-# ---------------------------------------------------------------------
 # Session State
-# ---------------------------------------------------------------------
+# setting sessions
 if "page" not in st.session_state:
     st.session_state["page"] = "input"  # "input" or "map"
 
@@ -77,10 +66,8 @@ if "prefs" not in st.session_state:
 if "pref_message" not in st.session_state:
     st.session_state["pref_message"] = None
 
-
-# ---------------------------------------------------------------------
-# Utility Helpers
-# ---------------------------------------------------------------------
+# Helpers
+# resetting sessions 
 def reset_all():
     st.session_state["page"] = "input"
     st.session_state["user_lat"] = None
@@ -88,13 +75,8 @@ def reset_all():
     st.session_state["route_df"] = None
     st.session_state["pref_message"]= None
 
-#??
-def _stable_seed(*parts: str) -> int:
-    s = "|".join(parts)
-    h = hashlib.sha256(s.encode("utf-8")).hexdigest()
-    return int(h[:8], 16)
 
-
+#formatting the distance 
 def format_distance_m(val) -> str:
     try:
         m = float(val)
@@ -108,16 +90,16 @@ def format_distance_m(val) -> str:
 def repo_root() -> Path:
     # src/app.py -> repo_root is parent of src
     return Path(__file__).resolve().parent.parent
-
+#loading the df and searching every possibibilty beacuase with probelms when pushing the data to github and with streamlit
 def load_df() -> pd.DataFrame:
-    root = Path(__file__).resolve().parent.parent  # repo root (…/kdap_pubcrawl)
+    root = Path(__file__).resolve().parent.parent
     target_name = "regensburg_bars_backup.csv"
 
     candidates = [
         root / "data" / target_name,
-        root / "Data" / target_name,       # Case-Variante
-        root / target_name,                # falls doch im Root
-        root / "src" / "data" / target_name,  # falls versehentlich unter src/data
+        root / "Data" / target_name,       
+        root / target_name,                
+        root / "src" / "data" / target_name,
     ]
 
     for p in candidates:
@@ -125,7 +107,7 @@ def load_df() -> pd.DataFrame:
             st.success(f"CSV gefunden: {p}")
             return pd.read_csv(p)
 
-    # Debug(kann später raus)
+    # Debugging(useful to differ for API Errors and not found data )
     st.error("CSV nicht gefunden. Debug-Infos:")
     st.write("repo_root:", str(root))
     st.write("root exists:", root.exists())
@@ -137,7 +119,7 @@ def load_df() -> pd.DataFrame:
     if data_dir.exists():
         st.write("data_dir contents:", sorted([x.name for x in data_dir.iterdir()]))
 
-    # Rekursive Suche
+    # searching for csv
     hits = list(root.rglob(target_name))
     st.write("rglob hits:", [str(h) for h in hits])
 
@@ -153,14 +135,14 @@ if st.session_state["page"] == "input":
     st.write("Location:")
     address = st.text_input("Address", value="Regensburg")
 
-    # 4 columns in ONE row directly under the address field
+    #input columns
     col_k, col_food, col_sports, col_surprise = st.columns([1.2, 1, 1, 1])
-
+    #slider reduced to k = 10
     with col_k:
         st.markdown("**Bars to visit**")
         k = st.slider(
             "k",
-            1, 20,
+            1, 10,
             int(st.session_state["k"]),
             1,
             label_visibility="collapsed"
@@ -265,7 +247,7 @@ elif st.session_state["page"] == "map":
         st.button("back", width="stretch", on_click=reset_all)
         st.stop()
 
-    # Collapsible map
+    # Collapsible map (for easier navigation)
     with st.expander("show/hide map", expanded=True):
         if "map_html" in st.session_state:
             components.html(
@@ -276,7 +258,7 @@ elif st.session_state["page"] == "map":
             st.warning("Missing map... try to reload it")
     if(pref_message):
         st.badge(pref_message,color ="orange")
+    #showing the bar order with score (and distance just for information )
     st.subheader("Bar tour order")
-    show_cols = [c for c in ["name", "distance_m", "score_display"] if c in route_df.columns]
+    show_cols = [c for c in ["name", "distance_m", "score"] if c in route_df.columns]
     st.dataframe(route_df[show_cols], width="stretch", hide_index=True)
-    st.divider()
