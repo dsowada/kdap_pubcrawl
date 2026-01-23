@@ -1,0 +1,78 @@
+Pubcrawl Planner – Streamlit Application
+
+This project is a local Streamlit-based web application that recommends and visualizes
+a pub crawl route based on bar data, distances, and user-defined preferences.
+
+The application is designed to run locally without complications, provided that all
+required dependencies are installed correctly.
+Also you can visit the website visited on https://pubcrawl.streamlit.app/
+
+PREREQUISITES:
+
+Before running the application, the following must be installed:
+
+- Python 3.10 or newer
+- pip (Python package manager)
+- A terminal (Linux, macOS, or Windows)
+
+==================================================
+1) DOWNLOAD THE PROJECT
+
+Download as ZIP
+
+- Download the repository as a ZIP file
+- Extract it
+- Open a terminal in the project root directory
+
+==================================================
+2) CREATE AND ACTIVATE THE VIRTUAL ENVIRONMENT
+
+Using a virtual environment (venv) is mandatory to avoid dependency conflicts.
+
+Linux:
+
+python3 -m venv venv
+source venv/bin/activate
+
+After activation, the terminal prompt must show:
+(venv)
+
+==================================================
+3) INSTALL ALL REQUIRED DEPENDENCIES
+
+All Python packages required for this application are listed in requirements.txt.
+They MUST be installed before starting the application.
+
+pip install --upgrade pip
+pip install -r requirements.txt
+
+If this step is skipped or incomplete, the Streamlit application will not start.
+
+==================================================
+4) START THE STREAMLIT APPLICATION
+
+
+After activating the virtual environment and installing all dependencies,
+start the Streamlit application with:
+
+streamlit run src/app.py
+
+Streamlit will start a local web server and print a URL, usually:
+
+http://localhost:8501
+
+Open this URL in a web browser to use the application.
+
+==================================================
+EXAMPLE PROJECT STRUCTURE
+
+
+pubcrawl/
+├─ src/
+│  ├─ app.py
+│  ├─ model_data.py
+│  ├─ geodata.py
+│  ├─  data/
+│      ├─ regensburg_bars.csv
+├─ requirements.txt
+└─ README.txt
